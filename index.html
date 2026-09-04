@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>스트림스 (STREAMS) 게임 기판</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        body {
+            background-color: #f2f4f7;
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            padding: 12px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 440px;
+            background: #ffffff;
+            border-radius: 20px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        header {
+            text-align: center;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #edf2f7;
+        }
+
+        header h1 {
+            font-size: 20px;
+            color: #1a202c;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+        }
+
+        header p {
+            font-size: 12px;
+            color: #718096;
+            margin-top: 2px;
+        }
+
+        .score-board {
+            background: linear-gradient(135deg, #4c51bf, #6b46c1);
+            color: white;
+            border-radius: 14px;
+            padding: 12px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .score-info {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .score-label {
+            font-size: 12px;
+            opacity: 0.85;
+            font-weight: 500;
+        }
+
+        .score-value {
+            font-size: 26px;
+            font-weight: 800;
+            line-height: 1.1;
+        }
+
+        .streak-info {
+            text-align: right;
+            font-size: 13px;
+            background: rgba(255, 255, 255, 0.15);
+            padding: 6px 12px;
+            border-radius: 20px;
+            backdrop-filter: blur(4px);
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+            margin: 4px 0;
+        }
+
+        .cell {
+            aspect-ratio: 1;
+            background: #f8fafc;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 6px;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .cell.active-select {
+            border-color: #4c51bf;
+            background: #ebf8ff;
+            box-shadow: 0 0 0 3px rgba(76, 81, 191, 0.2);
+        }
+
+        .cell.filled {
+            background: #ffffff;
+            border-color: #cbd5e0;
+        }
+
+        .cell.joker-cell {
+            background: #fffaf0;
+            border-color: #f6ad55;
+        }
+
+        .cell-num {
+            font-size: 10px;
+            color: #a0aec0;
+            font-weight: 700;
+        }
+
+        .cell-val {
+            font-size: 20px;
+            font-weight: 800;
+            color: #2d3748;
+            text-align: center;
+            margin-bottom: 2px;
+        }
+
+        .cell.joker-cell .cell-val {
+            color: #dd6b20;
+        }
+
+        /* 오름차순 연결 시각화 (초록색 하이라이트) */
+        .cell.connected {
+            border-color: #48bb78;
+            background: #f0fff4;
+        }
+        .cell.connected .cell-val {
+            color: #22543d;
+        }
+
+        /* 모달 스타일 */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.6);
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+            z-index: 1000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .keypad-container {
+            background: white;
+            width: 100%;
+            max-width: 440px;
+            border-radius: 24px 24px 0 0;
+            padding: 20px;
+            transform: translateY(100%);
+            transition: transform 0.25s cubic-bezier(0.1, 0.9, 0.2, 1);
+            max-height: 85vh;
+            overflow-y: auto;
+        }
+
+        .modal-overlay.active .keypad-container {
+            transform: translateY(0);
+        }
+
+        .keypad-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .keypad-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #2d3748;
+        }
+
+        .btn-close {
+            background: #edf2f7;
+            border: none;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            font-size: 16px;
+            color: #4a5568;
+            cursor: pointer;
+        }
+
+        .keypad-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 8px;
+        }
+
+        .key-btn {
+            aspect-ratio: 1.2;
+            background: #f7fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 700;
+            color: #2d3748;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+
+        .key-btn:active {
+            background: #e2e8f0;
+        }
+
+        .key-btn.joker-btn {
+            grid-column: span 2;
+            aspect-ratio: auto;
+            background: #fffaf0;
+            border-color: #fbd38d;
+            color: #dd6b20;
+        }
+
+        .actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 4px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            text-align: center;
+        }
+
+        .btn-reset {
+            background: #edf2f7;
+            color: #4a5568;
+        }
+
+        .btn-rules {
+            background: #ebf8ff;
+            color: #2b6cb0;
+        }
+
+        .rules-content {
+            font-size: 13px;
+            color: #4a5568;
+            line-height: 1.6;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .rules-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 8px;
+            font-size: 12px;
+        }
+
+        .rules-table th, .rules-table td {
+            border: 1px solid #e2e8f0;
+            padding: 4px 6px;
+            text-align: center;
+        }
+
+        .rules-table th {
+            background: #f7fafc;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>STREAMS</h1>
+        <p>스트림스 모바일 기판</p>
+    </header>
+
+    <div class="score-board">
+        <div class="score-info">
+            <span class="score-label">최종 점수</span>
+            <span class="score-value" id="totalScore">0점</span>
+        </div>
+        <div class="streak-info">
+            최장 스트릭: <strong id="maxStreak">0</strong>칸
+        </div>
+    </div>
+
+    <div class="grid" id="grid">
+        <!-- JS로 20개 칸 생성 -->
+    </div>
+
+    <div class="actions">
+        <button class="btn btn-rules" onclick="openRules()">점수표 / 규칙</button>
+        <button class="btn btn-reset" onclick="resetGame()">새 게임 시작</button>
+    </div>
+</div>
+
+<!-- 숫자 입력 키패드 모달 -->
+<div class="modal-overlay" id="keypadModal">
+    <div class="keypad-container">
+        <div class="keypad-header">
+            <span class="keypad-title"><span id="targetCellNum">1</span>번 칸에 들어갈 숫자 선택</span>
+            <button class="btn-close" onclick="closeKeypad()">✕</button>
+        </div>
+        <div class="keypad-grid" id="keypadGrid">
+            <!-- JS로 1~30 키패드 생성 -->
+        </div>
+    </div>
+</div>
+
+<!-- 규칙 및 점수표 모달 -->
+<div class="modal-overlay" id="rulesModal">
+    <div class="keypad-container">
+        <div class="keypad-header">
+            <span class="keypad-title">점수 계산 방식</span>
+            <button class="btn-close" onclick="closeRules()">✕</button>
+        </div>
+        <div class="rules-content">
+            <p>• 1번부터 20번 칸까지 오름차순(같거나 큰 숫자)으로 연결된 <strong>가장 긴 연속 구간</strong>의 칸 수로 점수를 받습니다.</p>
+            <p>• <strong>★ (조커)</strong>는 어떤 숫자로든 연결될 수 있는 와일드카드입니다.</p>
+            
+            <table class="rules-table">
+                <tr><th>연속 칸 수</th><th>점수</th><th>연속 칸 수</th><th>점수</th></tr>
+                <tr><td>1~4칸</td><td>0점</td><td>13칸</td><td>15점</td></tr>
+                <tr><td>5칸</td><td>1점</td><td>14칸</td><td>19점</td></tr>
+                <tr><td>6칸</td><td>2점</td><td>15칸</td><td>24점</td></tr>
+                <tr><td>7칸</td><td>3점</td><td>16칸</td><td>30점</td></tr>
+                <tr><td>8칸</td><td>4점</td><td>17칸</td><td>37점</td></tr>
+                <tr><td>9칸</td><td>5점</td><td>18칸</td><td>45점</td></tr>
+                <tr><td>10칸</td><td>7점</td><td>19칸</td><td>55점</td></tr>
+                <tr><td>11칸</td><td>9점</td><td>20칸</td><td>70점</td></tr>
+                <tr><td>12칸</td><td>11점</td><td>-</td><td>-</td></tr>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    // 스트림스 공식 점수표
+    const SCORE_TABLE = {
+        1: 0, 2: 0, 3: 0, 4: 0,
+        5: 1, 6: 2, 7: 3, 8: 4, 9: 5, 10: 7,
+        11: 9, 12: 11, 13: 15, 14: 19, 15: 24,
+        16: 30, 17: 37, 18: 45, 19: 55, 20: 70
+    };
+
+    let board = Array(20).fill(null);
+    let selectedCellIndex = null;
+
+    const gridEl = document.getElementById('grid');
+    const keypadModal = document.getElementById('keypadModal');
+    const rulesModal = document.getElementById('rulesModal');
+    const keypadGrid = document.getElementById('keypadGrid');
+    const targetCellNumEl = document.getElementById('targetCellNum');
+    const totalScoreEl = document.getElementById('totalScore');
+    const maxStreakEl = document.getElementById('maxStreak');
+
+    function init() {
+        createGrid();
+        createKeypad();
+        updateBoardUI();
+    }
+
+    function createGrid() {
+        gridEl.innerHTML = '';
+        for (let i = 0; i < 20; i++) {
+            const cell = document.createElement('div');
+            cell.className = 'cell';
+            cell.onclick = () => onCellClick(i);
+            
+            const numSpan = document.createElement('span');
+            numSpan.className = 'cell-num';
+            numSpan.innerText = i + 1;
+
+            const valSpan = document.createElement('span');
+            valSpan.className = 'cell-val';
+            valSpan.id = `cell-val-${i}`;
+
+            cell.appendChild(numSpan);
+            cell.appendChild(valSpan);
+            gridEl.appendChild(cell);
+        }
+    }
+
+    function createKeypad() {
+        keypadGrid.innerHTML = '';
+        for (let i = 1; i <= 30; i++) {
+            const btn = document.createElement('button');
+            btn.className = 'key-btn';
+            btn.innerText = i;
+            btn.onclick = () => selectNumber(i);
+            keypadGrid.appendChild(btn);
+        }
+
+        const jokerBtn = document.createElement('button');
+        jokerBtn.className = 'key-btn joker-btn';
+        jokerBtn.innerText = '★ (조커)';
+        jokerBtn.onclick = () => selectNumber('★');
+        keypadGrid.appendChild(jokerBtn);
+    }
+
+    function onCellClick(index) {
+        selectedCellIndex = index;
+        targetCellNumEl.innerText = index + 1;
+        
+        document.querySelectorAll('.cell').forEach((el, idx) => {
+            if (idx === index) el.classList.add('active-select');
+            else el.classList.remove('active-select');
+        });
+
+        keypadModal.classList.add('active');
+    }
+
+    function closeKeypad() {
+        keypadModal.classList.remove('active');
+        document.querySelectorAll('.cell').forEach(el => el.classList.remove('active-select'));
+        selectedCellIndex = null;
+    }
+
+    function selectNumber(value) {
+        if (selectedCellIndex !== null) {
+            board[selectedCellIndex] = value;
+            updateBoardUI();
+            closeKeypad();
+        }
+    }
+
+    function updateBoardUI() {
+        const bestPath = calculateBestStreams();
+
+        for (let i = 0; i < 20; i++) {
+            const valSpan = document.getElementById(`cell-val-${i}`);
+            const cellEl = valSpan.parentElement;
+
+            const val = board[i];
+            valSpan.innerText = val !== null ? val : '';
+
+            cellEl.classList.remove('filled', 'joker-cell', 'connected');
+
+            if (val !== null) {
+                cellEl.classList.add('filled');
+                if (val === '★') {
+                    cellEl.classList.add('joker-cell');
+                }
+            }
+
+            if (bestPath.includes(i) && val !== null) {
+                cellEl.classList.add('connected');
+            }
+        }
+
+        const maxStreak = bestPath.length;
+        const score = SCORE_TABLE[maxStreak] || 0;
+
+        maxStreakEl.innerText = maxStreak;
+        totalScoreEl.innerText = `${score}점`;
+    }
+
+    function calculateBestStreams() {
+        let maxPath = [];
+
+        function evaluateBoard(tempBoard) {
+            let currentPath = [];
+            let bestLocalPath = [];
+
+            for (let i = 0; i < 20; i++) {
+                const curr = tempBoard[i];
+                if (curr === null) {
+                    if (currentPath.length > bestLocalPath.length) bestLocalPath = [...currentPath];
+                    currentPath = [];
+                    continue;
+                }
+
+                if (currentPath.length === 0) {
+                    currentPath.push(i);
+                } else {
+                    const prevIdx = currentPath[currentPath.length - 1];
+                    const prevVal = tempBoard[prevIdx];
+                    if (curr >= prevVal) {
+                        currentPath.push(i);
+                    } else {
+                        if (currentPath.length > bestLocalPath.length) bestLocalPath = [...currentPath];
+                        currentPath = [i];
+                    }
+                }
+            }
+            if (currentPath.length > bestLocalPath.length) bestLocalPath = [...currentPath];
+            return bestLocalPath;
+        }
+
+        const jokerIndices = [];
+        for (let i = 0; i < 20; i++) {
+            if (board[i] === '★') jokerIndices.push(i);
+        }
+
+        if (jokerIndices.length === 0) {
+            return evaluateBoard(board);
+        }
+
+        let tempBoard = [...board];
+        
+        function solveJokers(jIndex) {
+            if (jIndex === jokerIndices.length) {
+                const path = evaluateBoard(tempBoard);
+                if (path.length > maxPath.length) {
+                    maxPath = path;
+                }
+                return;
+            }
+
+            const idx = jokerIndices[jIndex];
+            const candidates = [0, 31];
+            if (idx > 0 && tempBoard[idx-1] !== null && tempBoard[idx-1] !== '★') candidates.push(tempBoard[idx-1]);
+            if (idx < 19 && tempBoard[idx+1] !== null && tempBoard[idx+1] !== '★') candidates.push(tempBoard[idx+1]);
+
+            for (let num of candidates) {
+                tempBoard[idx] = num;
+                solveJokers(jIndex + 1);
+            }
+            tempBoard[idx] = '★';
+        }
+
+        solveJokers(0);
+        return maxPath;
+    }
+
+    function resetGame() {
+        if (confirm("게임을 리셋하고 새 게임을 시작하시겠습니까?")) {
+            board = Array(20).fill(null);
+            updateBoardUI();
+        }
+    }
+
+    function openRules() {
+        rulesModal.classList.add('active');
+    }
+
+    function closeRules() {
+        rulesModal.classList.remove('active');
+    }
+
+    init();
+</script>
+
+</body>
+</html>
